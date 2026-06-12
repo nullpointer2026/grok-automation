@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>Grok Automation</title>
+  <link rel="stylesheet" href="sidepanel.css">
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>🚀 Grok Automation <span class="version">v1.0.6</span></h1>
+      <p class="subtitle">grok.com 批量自动化工具</p>
+    </header>
+
+    <div class="tabs">
+      <button class="tab active" data-tab="control">控制</button>
+      <button class="tab" data-tab="settings">设置</button>
+      <button class="tab" data-tab="logs">日志</button>
+    </div>
+
+    <!-- 控制面板 -->
+    <div class="tab-content active" id="control">
+      <div class="mode-selector">
+        <button class="mode-btn active" data-mode="text2video">文本→视频</button>
+        <button class="mode-btn" data-mode="text2image">文本→图片</button>
+      </div>
+
+      <div class="form-group">
+        <label>并发提示词数（最多 20）</label>
+        <input type="number" id="concurrent" value="1" min="1" max="20">
+        <div style="margin-top:4px; color:#888; font-size:11px;">
+          💡 建议 1-3，超过容易被 Grok 限流。最大 20。
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label>随机延迟（秒）</label>
+        <div class="row">
+          <input type="number" id="delayMin" value="0" min="0">
+          <span>~</span>
+          <input type="number" id="delayMax" value="0" min="0">
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label>提示词（每段用空行分隔）</label>
+        <textarea id="prompts" rows="10" placeholder="在此输入提示词..."></textarea>
+        <input type="file" id="txtUpload" accept=".txt" style="margin-top:8px">
+      </div>
+
+      <div class="form-group">
+        <label>保存到文件夹（在「下载」目录下）</label>
+        <input type="text" id="folder" value="Grok-grok-folder">
+        <div style="margin-top:6px; display:flex; align-items:center; gap:8px;">
+          <input type="checkbox" id="appendDate" checked style="width:auto;">
+          <label for="appendDate" style="margin:0; cursor:pointer; color:#aaa; font-size:12px;">自动追加当天日期（年-月-日）</label>
+        </div>
+        <div id="folderPreview" style="margin-top:4px; color:#00d97e; font-size:11px;"></div>
+      </div>
+
+      <!-- ⭐ 新增：自动导出日志开关 -->
+      <div class="form-group">
+        <div style="display:flex; align-items:center; gap:8px;">
+          <input type="checkbox" id="autoExportLog" checked style="width:auto;">
+          <label for="autoExportLog" style="margin:0; cursor:pointer;">📥 任务结束后自动保存日志（保存到视频文件夹）</label>
+        </div>
+      </div>
+
+      <div class="actions">
+        <button id="runBtn" class="primary">▶ 开始运行</button>
+        <button id="stopBtn" class="danger">■ 停止</button>
+      </div>
+
+      <div class="actions">
+        <button id="probeBtn" class="secondary">🔍 测试连接</button>
+      </div>
+
+      <div class="queue">
+        <h3>📋 提示词队列</h3>
+        <div id="queueList"></div>
+      </div>
+    </div>
+
+    <!-- 设置 -->
+    <div class="tab-content" id="settings">
+      <div class="form-group">
+        <label>默认视频时长</label>
+        <select id="videoDuration">
+          <option value="6">6秒</option>
+          <option value="10" selected>10秒（Super Grok）</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>宽高比</label>
+        <select id="aspectRatio">
+          <option value="16:9">16:9</option>
+          <option value="9:16">9:16</option>
+          <option value="1:1">1:1</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>失败重试次数</label>
+        <input type="number" id="maxRetries" value="5" min="1" max="20">
+      </div>
+      <div class="form-group">
+        <label>自动下载视频质量</label>
+        <select id="videoQuality">
+          <option value="none">不下载</option>
+          <option value="480p">480p</option>
+          <option value="720p" selected>720p</option>
+        </select>
+      </div>
+      <button id="saveSettings" class="primary">💾 保存设置</button>
+    </div>
+
+    <!-- 日志 -->
+    <div class="tab-content" id="logs">
+      <!-- ⭐ 新增：日志保存路径显示区域 -->
+      <div id="logPathInfo" style="background:#1a2e22; border:1px solid #00d97e; padding:10px; border-radius:6px; margin-bottom:10px; font-size:12px; color:#00d97e; display:none;">
+        <div style="font-weight:bold; margin-bottom:4px;">📁 日志将保存到：</div>
+        <div id="logPathText" style="word-break:break-all; color:#fff; font-family:monospace;"></div>
+      </div>
+
+      <div id="logContainer"></div>
+      <div style="display:flex; gap:8px; margin-top:8px;">
+        <button id="exportLogs" class="primary" style="flex:1;">📥 导出日志</button>
+        <button id="clearLogs" style="padding:10px 16px; background:#2a2a2a; color:#e0e0e0; border:1px solid #444; border-radius:6px; cursor:pointer;">清空日志</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="sidepanel.js"></script>
+</body>
+</html>
