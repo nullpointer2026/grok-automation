@@ -8,7 +8,7 @@
 <body>
   <div class="container">
     <header>
-      <h1>🚀 Grok Automation <span class="version">v1.0.6</span></h1>
+      <h1>🚀 Grok Automation <span class="version" id="appVersion">v1.1.0</span></h1>
       <p class="subtitle">grok.com 批量自动化工具</p>
     </header>
 
@@ -43,7 +43,7 @@
       </div>
 
       <div class="form-group">
-        <label>提示词（每段用空行分隔）</label>
+        <label>提示词（每行一条，空行忽略）</label>
         <textarea id="prompts" rows="10" placeholder="在此输入提示词..."></textarea>
         <input type="file" id="txtUpload" accept=".txt" style="margin-top:8px">
       </div>
@@ -58,14 +58,6 @@
         <div id="folderPreview" style="margin-top:4px; color:#00d97e; font-size:11px;"></div>
       </div>
 
-      <!-- ⭐ 新增：自动导出日志开关 -->
-      <div class="form-group">
-        <div style="display:flex; align-items:center; gap:8px;">
-          <input type="checkbox" id="autoExportLog" checked style="width:auto;">
-          <label for="autoExportLog" style="margin:0; cursor:pointer;">📥 任务结束后自动保存日志（保存到视频文件夹）</label>
-        </div>
-      </div>
-
       <div class="actions">
         <button id="runBtn" class="primary">▶ 开始运行</button>
         <button id="stopBtn" class="danger">■ 停止</button>
@@ -76,7 +68,10 @@
       </div>
 
       <div class="queue">
-        <h3>📋 提示词队列</h3>
+        <div class="queue-header">
+          <h3>📋 提示词队列</h3>
+          <span id="queueCount">共 0 个提示词</span>
+        </div>
         <div id="queueList"></div>
       </div>
     </div>
@@ -115,12 +110,6 @@
 
     <!-- 日志 -->
     <div class="tab-content" id="logs">
-      <!-- ⭐ 新增：日志保存路径显示区域 -->
-      <div id="logPathInfo" style="background:#1a2e22; border:1px solid #00d97e; padding:10px; border-radius:6px; margin-bottom:10px; font-size:12px; color:#00d97e; display:none;">
-        <div style="font-weight:bold; margin-bottom:4px;">📁 日志将保存到：</div>
-        <div id="logPathText" style="word-break:break-all; color:#fff; font-family:monospace;"></div>
-      </div>
-
       <div id="logContainer"></div>
       <div style="display:flex; gap:8px; margin-top:8px;">
         <button id="exportLogs" class="primary" style="flex:1;">📥 导出日志</button>

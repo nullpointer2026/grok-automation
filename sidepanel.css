@@ -101,13 +101,32 @@ button.secondary {
 }
 
 .queue { margin-top: 20px; }
-.queue h3 { font-size: 13px; margin-bottom: 8px; }
+.queue-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.queue h3 { font-size: 13px; }
+#queueCount {
+  color: #00d97e;
+  font-size: 12px;
+  white-space: nowrap;
+}
 
 .queue-item {
   padding: 10px;
   background: #1a1a1a;
   border-radius: 6px;
   margin-bottom: 6px;
+  font-size: 12px;
+}
+.queue-empty {
+  padding: 10px;
+  color: #888;
+  background: #1a1a1a;
+  border-radius: 6px;
   font-size: 12px;
 }
 .queue-item .progress {

@@ -1,19 +1,29 @@
 // ============ Grok Automation Side Panel ============
+const APP_VERSION = '1.1.0';
+
 const state = {
   mode: 'text2video',
   running: false,
   queue: [],
   settings: {},
   logs: [],
-  failedPrompts: [],
-  currentFolder: ''  // ⭐ 新增：记录当前任务的保存文件夹
+  failedPrompts: []
 };
 
 document.addEventListener('DOMContentLoaded', async () => {
+  updateVersionLabel();
   await loadSettings();
   bindEvents();
+  refreshQueueFromInput();
   log('插件已就绪 ✓');
 });
+
+function updateVersionLabel() {
+  const versionEl = document.getElementById('appVersion');
+  if (versionEl) {
+    versionEl.textContent = 'v' + APP_VERSION;
+  }
+}
 
 // ============ 标签页切换 ============
 document.querySelectorAll('.tab').forEach(tab => {
@@ -45,9 +55,10 @@ function bindEvents() {
     state.logs = [];
     state.failedPrompts = [];
   });
-  document.getElementById('exportLogs').addEventListener('click', function() {
-    exportLogs(false); // 手动导出，弹出"另存为"
-  });
+  document.getElementById('exportLogs').addEventListener('click', exportLogs);
+
+  const promptInput = document.getElementById('prompts');
+  promptInput.addEventListener('input', refreshQueueFromInput);
 
   document.getElementById('txtUpload').addEventListener('change', function(e) {
     const file = e.target.files[0];
@@ -55,6 +66,7 @@ function bindEvents() {
     const reader = new FileReader();
     reader.onload = function(ev) {
       document.getElementById('prompts').value = ev.target.result;
+      refreshQueueFromInput();
     };
     reader.readAsText(file);
   });
@@ -68,32 +80,18 @@ function bindEvents() {
     concurrentInput.value = v;
   });
 
-  // 文件夹名预览 + 日志路径预览
+  // 文件夹名预览
   const folderInput = document.getElementById('folder');
   const appendDateCheckbox = document.getElementById('appendDate');
-  const autoExportCheckbox = document.getElementById('autoExportLog');
 
   function updateFolderPreview() {
     const baseName = folderInput.value || 'Grok-grok-folder';
     const fullName = appendDateCheckbox.checked ? baseName + getTodayDate() : baseName;
     document.getElementById('folderPreview').textContent = '📁 实际保存到：下载/' + fullName + '/';
-    updateLogPathPreview(fullName);
-  }
-
-  function updateLogPathPreview(folderName) {
-    const pathInfo = document.getElementById('logPathInfo');
-    const pathText = document.getElementById('logPathText');
-    if (autoExportCheckbox.checked) {
-      pathInfo.style.display = 'block';
-      pathText.textContent = '下载/' + folderName + '/Grok日志_xxx.txt';
-    } else {
-      pathInfo.style.display = 'none';
-    }
   }
 
   folderInput.addEventListener('input', updateFolderPreview);
   appendDateCheckbox.addEventListener('change', updateFolderPreview);
-  autoExportCheckbox.addEventListener('change', updateFolderPreview);
   updateFolderPreview();
 }
 
@@ -113,10 +111,33 @@ async function testConnection() {
     }
     log('  按钮禁用: ' + res.info.sendBtnDisabled);
     log('  当前视频数: ' + res.info.videoCount);
+    log('  当前图片数: ' + (res.info.imageCount || 0));
   } else {
     const err = res && res.error ? res.error : '未知错误';
     log('❌ 连接失败: ' + err);
   }
+}
+
+// ============ 提示词解析 ============
+function parsePrompts(text) {
+  return (text || '')
+    .split(/\r?\n/)
+    .map(function(p) { return p.trim(); })
+    .filter(Boolean);
+}
+
+function createQueue(prompts) {
+  return prompts.map(function(p, i) {
+    return { id: i + 1, prompt: p, status: 'waiting', progress: 0 };
+  });
+}
+
+function refreshQueueFromInput() {
+  if (state.running) return;
+  const promptInput = document.getElementById('prompts');
+  if (!promptInput) return;
+  state.queue = createQueue(parsePrompts(promptInput.value));
+  renderQueue();
 }
 
 // ============ 设置 ============
@@ -152,16 +173,14 @@ async function saveSettings() {
 async function startBatch() {
   if (state.running) return;
 
-  const text = document.getElementById('prompts').value.trim();
-  if (!text) {
+  const text = document.getElementById('prompts').value;
+  const prompts = parsePrompts(text);
+  if (prompts.length === 0) {
     alert('请输入提示词');
     return;
   }
 
-  const prompts = text.split(/\n\s*\n/).map(function(p) { return p.trim(); }).filter(Boolean);
-  state.queue = prompts.map(function(p, i) {
-    return { id: i + 1, prompt: p, status: 'waiting', progress: 0 };
-  });
+  state.queue = createQueue(prompts);
 
   renderQueue();
   state.running = true;
@@ -175,6 +194,7 @@ async function startBatch() {
   let concurrent = parseInt(document.getElementById('concurrent').value) || 1;
   if (concurrent < 1) concurrent = 1;
   if (concurrent > 20) concurrent = 20;
+  // 不超过任务总数
   if (concurrent > prompts.length) concurrent = prompts.length;
 
   let warning = '';
@@ -186,13 +206,13 @@ async function startBatch() {
   if (document.getElementById('appendDate').checked) {
     folder = folder + getTodayDate();
   }
-  state.currentFolder = folder; // ⭐ 记录当前文件夹
-  log('📁 视频将保存到「下载/' + folder + '/」');
+  log('📁 文件将保存到「下载/' + folder + '/」');
 
   // 共享的索引计数器
   let nextIndex = 0;
   const total = state.queue.length;
 
+  // 单个 worker：不断从队列取下一条处理
   async function worker(workerId) {
     while (state.running) {
       const myIndex = nextIndex++;
@@ -216,7 +236,8 @@ async function startBatch() {
         item.progress = 100;
         let dlInfo = '';
         if (result.downloaded) {
-          dlInfo = '（已下载 ' + result.downloaded + ' 个视频）';
+          const mediaLabel = result.mediaType === 'image' ? '图片' : '视频';
+          dlInfo = '（已下载 ' + result.downloaded + ' 个' + mediaLabel + '）';
         }
         log('✓ [' + item.id + '] 完成' + dlInfo);
       } else {
@@ -227,6 +248,7 @@ async function startBatch() {
       }
       renderQueue();
 
+      // 随机延迟
       if (delayMax > 0) {
         const delay = (delayMin + Math.random() * (delayMax - delayMin)) * 1000;
         await sleep(delay);
@@ -234,6 +256,7 @@ async function startBatch() {
     }
   }
 
+  // 启动 N 个 worker 并发跑
   const workers = [];
   for (let i = 0; i < concurrent; i++) {
     workers.push(worker(i + 1));
@@ -246,13 +269,6 @@ async function startBatch() {
   if (state.failedPrompts.length > 0) {
     log('⚠️ 共 ' + state.failedPrompts.length + ' 条失败，可点击「📥 导出日志」查看');
   }
-
-  // ⭐ 自动导出日志
-  if (document.getElementById('autoExportLog').checked) {
-    log('📥 自动保存日志中...');
-    await sleep(500);
-    exportLogs(true); // true = 自动导出（不弹"另存为"，保存到视频文件夹）
-  }
 }
 
 function stopBatch() {
@@ -263,6 +279,14 @@ function stopBatch() {
 // ============ 渲染队列 ============
 function renderQueue() {
   const container = document.getElementById('queueList');
+  const count = document.getElementById('queueCount');
+  if (count) {
+    count.textContent = '共 ' + state.queue.length + ' 个提示词';
+  }
+  if (state.queue.length === 0) {
+    container.innerHTML = '<div class="queue-empty">粘贴或输入提示词后会自动显示队列</div>';
+    return;
+  }
   let html = '';
   for (const item of state.queue) {
     html += '<div class="queue-item">';
@@ -275,7 +299,12 @@ function renderQueue() {
 }
 
 function escapeHtml(s) {
-  return s.replace(/&/g, '&').replace(/</g, '<').replace(/>/g, '>');
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
 }
 
 // ============ 与 content.js 通信 ============
@@ -308,8 +337,10 @@ function log(msg) {
   const time = new Date().toLocaleTimeString();
   const fullLine = '[' + time + '] ' + msg;
 
+  // 保存到日志数组（用于导出）
   state.logs.push(fullLine);
 
+  // 显示到 UI
   const line = document.createElement('div');
   line.className = 'log-line';
   line.textContent = fullLine;
@@ -328,16 +359,14 @@ function getTodayDate() {
 }
 
 // ============ 导出日志 ============
-// auto = true：自动导出（保存到视频文件夹，不弹窗）
-// auto = false：手动导出（弹"另存为"对话框）
-function exportLogs(auto) {
+function exportLogs() {
   if (state.logs.length === 0) {
-    if (!auto) alert('暂无日志可导出');
+    alert('暂无日志可导出');
     return;
   }
 
   // 构建文件内容
-  let content = '🚀 Grok Automation v1.0.6\n';
+  let content = '🚀 Grok Automation v' + APP_VERSION + '\n';
   content += 'grok.com 批量自动化工具\n\n';
   content += '日志\n';
 
@@ -367,36 +396,19 @@ function exportLogs(auto) {
                   (now.getMonth() + 1) + '-' +
                   now.getDate() + '_' +
                   pad(now.getHours()) + '-' +
-                  pad(now.getMinutes()) + '-' +
-                  pad(now.getSeconds());
-  const filenameOnly = 'Grok日志_' + dateStr + '.txt';
-
-  // ⭐ 决定保存路径
-  let filename;
-  let saveAs;
-  if (auto && state.currentFolder) {
-    // 自动导出：保存到视频文件夹
-    filename = state.currentFolder + '/' + filenameOnly;
-    saveAs = false;
-  } else {
-    // 手动导出：弹出"另存为"
-    filename = filenameOnly;
-    saveAs = true;
-  }
+                  pad(now.getMinutes());
+  const filename = 'Grok日志_' + dateStr + '.txt';
 
   try {
     chrome.downloads.download({
       url: url,
       filename: filename,
-      saveAs: saveAs,
-      conflictAction: 'uniquify'
+      saveAs: true
     }, function(downloadId) {
       if (chrome.runtime.lastError) {
-        console.error('日志下载失败:', chrome.runtime.lastError);
-        // 备用方法
         const a = document.createElement('a');
         a.href = url;
-        a.download = filenameOnly;
+        a.download = filename;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
@@ -408,7 +420,7 @@ function exportLogs(auto) {
   } catch (e) {
     const a = document.createElement('a');
     a.href = url;
-    a.download = filenameOnly;
+    a.download = filename;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -417,9 +429,5 @@ function exportLogs(auto) {
     }, 1000);
   }
 
-  if (auto) {
-    log('✓ 日志已自动保存到：下载/' + filename);
-  } else {
-    log('📥 已导出日志：' + filenameOnly + '（共 ' + state.logs.length + ' 行，失败 ' + state.failedPrompts.length + ' 条）');
-  }
+  log('📥 已导出日志：' + filename + '（共 ' + state.logs.length + ' 行，失败 ' + state.failedPrompts.length + ' 条）');
 }
